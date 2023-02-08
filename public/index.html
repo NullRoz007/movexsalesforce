@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="author" content="Mark Otto, Jacob Thornton, and Bootstrap contributors">
+    <meta name="generator" content="Hugo 0.84.0">
+    <title>MoveX Booking Confirmations</title>
+
+    <!-- Bootstrap core CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-Zenh87qX5JnK2Jl0vWa8Ck2rdkQ2Bzep5IDxbcnCeuOxjzrPF/et3URy9Bv1WTRi" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-OERcA2EqjJCMA+/3y+gxIOqMEjwtxJY7qPCqsdltbNJuaOe923+mo//f6V8Qbsw3" crossorigin="anonymous"></script>
+    <script src="https://code.jquery.com/jquery-3.6.1.slim.min.js" integrity="sha256-w8CvhFs7iHNVUtnSP0YKEg00p9Ih13rlL9zGqvLdePA=" crossorigin="anonymous"></script>
+
+    <script src="main.js"></script>
+    <link href="styles.css" rel="stylesheet">
+
+    </head>
+    <body>
+
+    <div class="col-lg-8 mx-auto p-3 py-md-5">
+    <header class="d-flex align-items-center pb-3 mb-5 border-bottom">
+        <a href="/" class="d-flex align-items-center text-dark text-decoration-none">
+        <img width="160" src="https://static.wixstatic.com/media/e56cc4_064af21556a74bd9b2caa900d776dffd~mv2.png/v1/fill/w_560,h_296,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/Movex%20Transparent%20lines%20removed%20.png">
+        <span class="fs-4">Booking Confirmations</span>
+        </a>
+    </header>
+
+    <main><p><h4>The following party bookings will be sent confirmation emails:</h4><br></p>  
+    <div id="parties-table">
+        
+    </div>
+
+    <button type="button" class="btn btn-primary" style="float: right;" onclick="send_emails();">Send</button>
+
+    </main>
+    </div>
+  </body>
+</html>
