@@ -1,0 +1,17 @@
+{
+    "name": "movex-email-sender",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "dayjs": "^1.11.7",
+        "express": "^4.18.2",
+        "jsforce": "^1.11.0",
+        "table-builder": "^2.1.1"
+    }
+}
