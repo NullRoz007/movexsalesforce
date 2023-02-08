@@ -186,7 +186,7 @@ async function send_party_email(party) {
       <soapenv:Body>
          <urn:sendEmail>
             <urn:messages xsi:type="urn:SingleEmailMessage">
-               <urn:subject>Testing Date</urn:subject>
+               <urn:subject>MoveX Birthday Party Confirmation!</urn:subject>
                <urn:htmlBody>${sanitizeForXml(template)}</urn:htmlBody>
                <urn:toAddresses>${party.Bnow__Customer_Email__c}</urn:toAddresses>
             </urn:messages>
