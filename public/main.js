@@ -6,7 +6,17 @@ const http_get = (url) => {
 }
 
 const send_emails = () => {
-    http_get("/send");
+    var send_result = JSON.parse(http_get("/send"));
+    var successful = 0;
+    var failed     = 0;
+    
+    send_result.forEach(result => {
+        if(result.result == "success") successful++;
+        else failed++;
+    });
+
+    alert(successful + " sent.\n"+failed+" failed.\n");
+    
 };
 
 $(document).ready(function() {

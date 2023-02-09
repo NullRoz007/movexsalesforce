@@ -3,6 +3,8 @@ const jsforce    = require('jsforce');
 const dayjs      = require('dayjs');
 const isBetween  = require('dayjs/plugin/isBetween');
 const { transferableAbortSignal } = require('util');
+const { Resolver } = require('dns');
+const { resolve } = require('path');
 
 var conn;
 var config;
@@ -34,7 +36,7 @@ const process_parties = (callback) => {
             const week_end   = dayjs().endOf('week');
 
             // Use the dayjs isBetween method to determine if the party date is within the current week
-            if(date.isBetween(week_start, week_end)) {
+            if(date.isBetween(week_start, week_end) && (date.isSame(dayjs()) || date.isAfter(dayjs()))) {
                 // If the party date is within the current week, add the party data to the parties array
                 parties.push(record);
             }
@@ -171,7 +173,7 @@ const build_email_body = (party) => {
  * @param {Object} party - The party object
  */
 async function send_party_email(party) {
-    console.log(party);
+    
     // Build the email template from the party object
     const template = build_email_body(party);
 
@@ -210,7 +212,13 @@ async function send_party_email(party) {
     );
 
     // Log the response for debugging purposes
-    console.log(JSON.stringify(response, null, 2));
+    if(response['soapenv:Envelope']['soapenv:Body'].sendEmailResponse.result.success == 'true') {
+        console.log("MoveXSF::MXSF: Sent party email to " + party.Bnow__Customer_Email__c + " successfully");
+
+        resolve(response['soapenv:Envelope']['soapenv:Body'].sendEmailResponse.result.success);
+    } else {
+        reject(response['soapenv:Envelope']['soapenv:Body'].sendEmailResponse.result.success);
+    }
 }
 
 function sanitizeForXml(value) {

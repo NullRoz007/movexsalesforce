@@ -61,14 +61,30 @@ app.get('/gentable', (req, res) => {
 app.get('/send', (req, res) => {
     console.log("MoveXSF::WebService: GET /send");
     console.warn("MoveXSF::WebService: TODO: Change to POST Request!!!");
-
+    
     // Call the get_parties function on the MoveXSF instance
     mxsf.get_parties(parties => {
+        var processed = 0;
+        var results = [];
         // Send an email to each party using the send_email function of the MoveXSF instance
         parties.forEach(party => {
             if(mxsf.config.testing) party.Bnow__Customer_Email__c = mxsf.config.testing_address;
-            mxsf.send_email(party);
+            mxsf.send_email(party)
+            .then(response => { //send worked
+                results.push({'result': 'success', 'party': party});
+            })
+            .catch(response => { //failed
+                results.push({'result': 'failure', 'party': party});
+            })
+            .finally(() => {
+                processed += 1;
+
+                if(processed == parties.length) {
+                    res.send(JSON.stringify(results));
+                }
+            });
         });
+
     });
 });
 
