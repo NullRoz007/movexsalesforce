@@ -30,6 +30,7 @@ app.get('/gentable', (req, res) => {
 
         // Define the headers for the table
         var headers = { 
+            "Name": "BKN",
             "Bnow__Customer_Full_Name__c" : "Customer", 
             "Bnow__Customer_Email__c": "Email Address", 
             "Bnow__P_L_Date__c": "Date", 

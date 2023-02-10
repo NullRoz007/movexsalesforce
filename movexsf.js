@@ -17,7 +17,8 @@ const process_parties = (callback) => {
     // Create an array to store the party data
     var parties = [];
     // Execute a query to retrieve party data from the Salesforce API
-    var query = conn.query(`SELECT Bnow__Booking_Description__c, 
+    var query = conn.query(`SELECT Name,
+                                   Bnow__Booking_Description__c, 
                                    Bnow__Customer_Email__c, 
                                    Bnow__Customer_Full_Name__c, 
                                    Bnow__P_L_Date__c, 
@@ -153,6 +154,7 @@ const build_email_body = (party) => {
     var body = fs.readFileSync('./templates/party.html', 'utf8');
 
     // Extract party information from the party object
+    var bkn  = party.Name;
     var name = party.Bnow__Customer_Full_Name__c;
     var date = party.Bnow__P_L_Date__c.replaceAll('-', '/');
     var time = dayjs('1/1/1 ' + party.Bnow__Booking_Time__c).format('hh:mm a') ;
@@ -161,7 +163,7 @@ const build_email_body = (party) => {
     var jumpers = extract_jumpers_from_description(party.Bnow__Booking_Description__c);
 
     // Replace placeholders in the HTML template with actual values
-    var template = populate_template(body, {'name': name, 'date': date, 'time': time, 'jumpers': jumpers});
+    var template = populate_template(body, {'bkn': bkn, 'name': name, 'date': date, 'time': time, 'jumpers': jumpers});
 
     // Return the populated email body
     return template;
