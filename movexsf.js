@@ -9,38 +9,37 @@ const { resolve } = require('path');
 var conn;
 var config;
 
-/**
- * process_parties - Retrieve all parties from the Salesforce API and store them in an array
- * @param {Function} callback - Callback function to return the party data
- */
-const process_parties = (callback) => {
-    // Create an array to store the party data
-    var parties = [];
+const fetch_parties = (fetch_callback) => {
+    // Create an table to store the party data
+    var parties = {}; //hash table
     // Execute a query to retrieve party data from the Salesforce API
     var query = conn.query(`SELECT Name,
-                                   Bnow__Booking_Description__c, 
-                                   Bnow__Customer_Email__c, 
-                                   Bnow__Customer_Full_Name__c, 
-                                   Bnow__P_L_Date__c, 
-                                   Bnow__Booking_Time__c 
-                            FROM   Bnow__Booking__c 
-                            WHERE 
-                                   Bnow__Booking_Description__c LIKE '%Party%' 
-                            ORDER  BY 
-                                   Bnow__P_L_Date__c DESC`)
-        // Handle the query record event
-        .on("record", function(record) {
-            // Use the dayjs library to parse the date of the party
-            const date       = dayjs(record.Bnow__P_L_Date__c);
-            // Use the dayjs library to calculate the start and end of the current week
-            const week_start = dayjs().startOf('week');
-            const week_end   = dayjs().endOf('week');
-
-            // Use the dayjs isBetween method to determine if the party date is within the current week
-            if(date.isBetween(week_start, week_end) && (date.isSame(dayjs()) || date.isAfter(dayjs()))) {
-                // If the party date is within the current week, add the party data to the parties array
-                parties.push(record);
-            }
+                               Bnow__Booking_Description__c, 
+                               Bnow__Customer_Email__c, 
+                               Bnow__Customer_Full_Name__c, 
+                               Bnow__P_L_Date__c, 
+                               Bnow__Booking_Time__c,
+                               Bnow__Status__c,
+                               Bnow__Room__c
+                        FROM   Bnow__Booking__c 
+                        WHERE 
+                               Bnow__Booking_Description__c LIKE '%Party%' 
+                        ORDER  BY 
+                               Bnow__P_L_Date__c DESC`)
+    // Handle the query record event
+    .on("record", function(record) {
+        // Use the dayjs library to parse the date of the party
+        const date       = dayjs(record.Bnow__P_L_Date__c);
+        // Use the dayjs library to calculate the start and end of the current week
+        const week_start = dayjs().startOf('week');
+        const week_end   = week_start.add(8, 'day');
+    
+        // Use the dayjs isBetween method to determine if the party date is within the current week
+        if(date.isBetween(week_start, week_end) && (date.isSame(dayjs()) || date.isAfter(dayjs())) && record.Bnow__Status__c != "Cancelled") {
+            var booking_id = get_booking_sfid(record);
+            // If the party date is within the current week, add the party data to the parties hashtable
+            parties[booking_id] = record;
+        }
     })
     // Handle the query end event
     .on("end", function() {
@@ -49,7 +48,7 @@ const process_parties = (callback) => {
         console.log("total fetched : " + query.totalFetched);
 
         // Call the callback function to return the party data
-        callback(parties);
+        fetch_callback(parties);
     })
     // Handle the query error event
     .on("error", function(err) {
@@ -57,7 +56,47 @@ const process_parties = (callback) => {
         console.error(err);
     })
     // Run the query with the specified parameters
-    .run({ autoFetch : true, maxFetch : 4000 });
+    .run({ autoFetch : true, maxFetch : 64 });
+};
+
+/**
+ * process_parties - Retrieve all parties from the Salesforce API and store them in an array
+ * @param {Function} callback - Callback function to return the party data
+ */
+const process_parties = (callback) => {
+	//Get party data from salesforce
+	fetch_parties((parties) => {
+		//fetch question data from salesforce attach to corresponding bookings
+		var info_query = conn.query(`
+		SELECT Name, 
+			   Bnow__Answer__c,
+			   Bnow__Answer_Set__c,	
+			   Bnow__Question__c,
+			   Bnow__Question_Text__c,
+			   Bnow__Booking__c
+		FROM   Bnow__Answer__c
+		ORDER BY 
+			   Name DESC`)
+		.on('record', (record) => {
+			if(parties.hasOwnProperty(record.Bnow__Booking__c)) {
+				if(!parties[record.Bnow__Booking__c].hasOwnProperty('questions')) {
+					//If the booking has no questions attatched allready, create an array to store questions
+					parties[record.Bnow__Booking__c]['questions'] = [];
+				}
+				// If the parties hashtable contains a booking matching a question, add that question
+				// to the corresponding booking
+				parties[record.Bnow__Booking__c]["questions"].push(record);
+			}
+		})
+		.on('end', () => {
+            //TODO: Query booking room data
+			callback(parties);
+		})
+		.on('error', (error) => {
+			throw error;
+		})
+		.run({autoFetch: true, maxFetch: parties.length * 2});
+	});
 };
 
 // extend the dayjs library with the isBetween method
@@ -145,6 +184,19 @@ const extract_jumpers_from_description = (desc) => {
 }
 
 /**
+ * Grab the Salesforce ID from a booking
+ * @param {string} booking - a Bnow__Booking__c Record
+ * @returns {number} Booking Salesforce ID
+ */
+const get_booking_sfid = (booking) => {
+	var url = booking.attributes.url;
+	var parts = url.split('/');
+	
+	var id = parts[parts.length - 1];
+	return id;
+}
+
+/**
  * Build an email body from a party object
  * @param {Object} party - The party object with information to populate the template
  * @returns {string} The populated email body
@@ -158,12 +210,15 @@ const build_email_body = (party) => {
     var name = party.Bnow__Customer_Full_Name__c;
     var date = party.Bnow__P_L_Date__c.replaceAll('-', '/');
     var time = dayjs('1/1/1 ' + party.Bnow__Booking_Time__c).format('hh:mm a') ;
-
+	
+	var child_name = party.questions[0].Bnow__Answer__c;
+	var child_age  = party.questions[1].Bnow__Answer__c;
+	
     // Extract the number of jumpers from the party description
     var jumpers = extract_jumpers_from_description(party.Bnow__Booking_Description__c);
 
     // Replace placeholders in the HTML template with actual values
-    var template = populate_template(body, {'bkn': bkn, 'name': name, 'date': date, 'time': time, 'jumpers': jumpers});
+    var template = populate_template(body, {'bkn': bkn, 'name': name, 'date': date, 'time': time, 'jumpers': jumpers, 'child_age': child_age, 'child_name': child_name});
 
     // Return the populated email body
     return template;

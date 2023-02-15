@@ -28,8 +28,10 @@
     </header>
 
     <main><p><h4>The following party bookings will be sent confirmation emails:</h4><br></p>  
-    <div id="parties-table">
-        
+    <div id="parties-table" style ="z-index: -1; left: 0px;">
+    <div class="spinner-border" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
     </div>
     <button type="button" class="btn btn-primary" style="float: right;" onclick="send_emails();">Send</button>
     </main>

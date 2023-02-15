@@ -23,25 +23,26 @@ app.get('/gentable', (req, res) => {
     console.log("MoveXSF::WebService: GET /gentable");
     // Call the get_parties function on the MoveXSF instance
     mxsf.get_parties(parties => {
+		var headers_array = [];
         // Add the "url" property to each party
         for(p in parties) {
             parties[p]['url'] = parties[p].attributes.url;
+			headers_array.push(parties[p]);
         }
-
+		
         // Define the headers for the table
         var headers = { 
             "Name": "BKN",
             "Bnow__Customer_Full_Name__c" : "Customer", 
             "Bnow__Customer_Email__c": "Email Address", 
             "Bnow__P_L_Date__c": "Date", 
-            "Bnow__Booking_Time__c": "Time", 
-            "url": "Salesforce URL" 
+            "Bnow__Booking_Time__c": "Time"
         };
 
         // Create a table using the table-builder library and render it
         var table = (new Table({'class': 'table'}))
                     .setHeaders(headers)
-                    .setData(parties)
+                    .setData(headers_array)
                     .render();
         
         // Add custom ids to the table elements for styling
@@ -50,6 +51,13 @@ app.get('/gentable', (req, res) => {
 
         // Send the rendered table as the response
         res.send(table);
+    });
+});
+
+app.get('/schedule', (req, res) => {
+    console.log("MoveXSF::WebService: GET /schedule");
+    mxsf.get_parties(parties => {
+        console.log(parties);
     });
 });
 
@@ -64,7 +72,10 @@ app.get('/send', (req, res) => {
     console.warn("MoveXSF::WebService: TODO: Change to POST Request!!!");
     
     // Call the get_parties function on the MoveXSF instance
-    mxsf.get_parties(parties => {
+    mxsf.get_parties(parties_hashtable => {
+		var parties = [];
+		for(p in parties_hashtable) parties.push(parties_hashtable[p]);
+		
         var processed = 0;
         var results = [];
         // Send an email to each party using the send_email function of the MoveXSF instance
