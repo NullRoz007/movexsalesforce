@@ -16,7 +16,8 @@ const fetch_parties = (fetch_callback) => {
     var query = conn.query(`SELECT Name,
                                Bnow__Booking_Description__c, 
                                Bnow__Customer_Email__c, 
-                               Bnow__Customer_Full_Name__c, 
+                               Bnow__Customer_Full_Name__c,
+                               Bnow__Balance_Paid__c, 
                                Bnow__P_L_Date__c, 
                                Bnow__Booking_Time__c,
                                Bnow__Status__c,
@@ -62,6 +63,7 @@ const fetch_parties = (fetch_callback) => {
 /**
  * process_parties - Retrieve all parties from the Salesforce API and store them in an array
  * @param {Function} callback - Callback function to return the party data
+ * TODO: This is highly inefficient, need to combine the info_query into the query used in fetch_parties.
  */
 const process_parties = (callback) => {
 	//Get party data from salesforce
@@ -78,14 +80,22 @@ const process_parties = (callback) => {
 		ORDER BY 
 			   Name DESC`)
 		.on('record', (record) => {
-			if(parties.hasOwnProperty(record.Bnow__Booking__c)) {
-				if(!parties[record.Bnow__Booking__c].hasOwnProperty('questions')) {
-					//If the booking has no questions attatched allready, create an array to store questions
-					parties[record.Bnow__Booking__c]['questions'] = [];
+            var booking_id = record.Bnow__Booking__c;
+
+			if(parties.hasOwnProperty(booking_id)) {
+				if(!parties[booking_id].hasOwnProperty('questions')) {
+					//If the booking has no questions property, create an array to store questions
+					parties[booking_id]['questions'] = [];
 				}
+
+                if(!parties[booking_id].hasOwnProperty('payment_link')) { 
+                    parties[booking_id]['payment_link'] = null;
+                }
+
 				// If the parties hashtable contains a booking matching a question, add that question
 				// to the corresponding booking
-				parties[record.Bnow__Booking__c]["questions"].push(record);
+				parties[booking_id].questions.push(record);
+                parties[booking_id].payment_link = config.payment_link + booking_id;
 			}
 		})
 		.on('end', () => {
@@ -202,6 +212,7 @@ const get_booking_sfid = (booking) => {
  * @returns {string} The populated email body
  */
 const build_email_body = (party) => {
+    console.log("MoveXSF::MXSF::build_email_body()");
     // Read the HTML template from the file system
     var body = fs.readFileSync('./templates/party.html', 'utf8');
 
@@ -210,7 +221,9 @@ const build_email_body = (party) => {
     var name = party.Bnow__Customer_Full_Name__c;
     var date = party.Bnow__P_L_Date__c.replaceAll('-', '/');
     var time = dayjs('1/1/1 ' + party.Bnow__Booking_Time__c).format('hh:mm a') ;
-	
+	var payment = (party.Bnow__Balance_Paid__c == 100) ? "" :
+                "If you still need to pay your deposit, you can do so <a href=\""+party.payment_link +"\">here</a>.";
+    
 	var child_name = party.questions[0].Bnow__Answer__c;
 	var child_age  = party.questions[1].Bnow__Answer__c;
 	
@@ -218,7 +231,16 @@ const build_email_body = (party) => {
     var jumpers = extract_jumpers_from_description(party.Bnow__Booking_Description__c);
 
     // Replace placeholders in the HTML template with actual values
-    var template = populate_template(body, {'bkn': bkn, 'name': name, 'date': date, 'time': time, 'jumpers': jumpers, 'child_age': child_age, 'child_name': child_name});
+    var template = populate_template(body, {
+                     'bkn' : bkn, 
+                     'name': name, 
+                     'date': date, 
+                     'time': time, 
+                     'jumpers': jumpers, 
+                     'child_age': child_age, 
+                     'child_name': child_name, 
+                     'payment': payment 
+                    });
 
     // Return the populated email body
     return template;
@@ -230,7 +252,7 @@ const build_email_body = (party) => {
  * @param {Object} party - The party object
  */
 async function send_party_email(party) {
-    
+    console.log("MoveXSF::MXSF::send_party_email()");
     // Build the email template from the party object
     const template = build_email_body(party);
 
@@ -274,7 +296,9 @@ async function send_party_email(party) {
 
         resolve(response['soapenv:Envelope']['soapenv:Body'].sendEmailResponse.result.success);
     } else {
-        reject(response['soapenv:Envelope']['soapenv:Body'].sendEmailResponse.result.success);
+        console.log("MoveXSF::MXSF: Party email to " + party.Bnow__Customer_Email__c + " failed");
+        console.log(response['soapenv:Envelope']['soapenv:Body'].sendEmailResponse);
+        reject(response['soapenv:Envelope']['soapenv:Body'].sendEmailResponse.result.failure);
     }
 }
 
