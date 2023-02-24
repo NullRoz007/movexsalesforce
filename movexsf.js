@@ -9,9 +9,33 @@ const { resolve } = require('path');
 var conn;
 var config;
 
+const template_mod_functions = {
+    'add': (x, v) => {return x + v},
+    'sub': (x, v) => {return x - v}
+};
+
+var template_modifications = [];
+
+const add_template_modification = (h, fn, k, v) => {
+    var mod_object = { hash: h, f: fn, key: k, value: v };
+    console.log("Adding Template Mod: ");
+    console.log(mod_object);
+    template_modifications.push(mod_object);
+};
+
+const modify_template_value_output = (template, key, value, mod_function) => {
+    var x = template[key];
+    template[key] = mod_function(x, value);
+
+    return template;
+};
+
 const fetch_parties = (fetch_callback) => {
     // Create an table to store the party data
     var parties = {}; //hash table
+    const week_start = dayjs().startOf('week');
+    const week_end   = week_start.add(8, 'day');
+    
     // Execute a query to retrieve party data from the Salesforce API
     var query = conn.query(`SELECT Name,
                                Bnow__Booking_Description__c, 
@@ -32,12 +56,11 @@ const fetch_parties = (fetch_callback) => {
         // Use the dayjs library to parse the date of the party
         const date       = dayjs(record.Bnow__P_L_Date__c);
         // Use the dayjs library to calculate the start and end of the current week
-        const week_start = dayjs().startOf('week');
-        const week_end   = week_start.add(8, 'day');
-    
+
         // Use the dayjs isBetween method to determine if the party date is within the current week
         if(date.isBetween(week_start, week_end) && (date.isSame(dayjs()) || date.isAfter(dayjs())) && record.Bnow__Status__c != "Cancelled") {
             var booking_id = get_booking_sfid(record);
+            console.log(booking_id);
             // If the party date is within the current week, add the party data to the parties hashtable
             parties[booking_id] = record;
         }
@@ -81,7 +104,7 @@ const process_parties = (callback) => {
 			   Name DESC`)
 		.on('record', (record) => {
             var booking_id = record.Bnow__Booking__c;
-
+            
 			if(parties.hasOwnProperty(booking_id)) {
 				if(!parties[booking_id].hasOwnProperty('questions')) {
 					//If the booking has no questions property, create an array to store questions
@@ -177,7 +200,7 @@ const populate_template = (template, values) => {
  * @param {string} desc - The booking description
  * @returns {number} The number of jumpers
  */
-const extract_jumpers_from_description = (desc) => {
+const get_jumpers = (desc) => {
     var products = desc.split('\n');
     var total = 0;
     for(p in products) {
@@ -195,7 +218,7 @@ const extract_jumpers_from_description = (desc) => {
 
 /**
  * Grab the Salesforce ID from a booking
- * @param {string} booking - a Bnow__Booking__c Record
+ * @param {object} booking - a Bnow__Booking__c Record
  * @returns {number} Booking Salesforce ID
  */
 const get_booking_sfid = (booking) => {
@@ -212,6 +235,8 @@ const get_booking_sfid = (booking) => {
  * @returns {string} The populated email body
  */
 const build_email_body = (party) => {
+    //add_template_modification('a022e000002FKphAAG', 'add', 'jumpers', 1);
+
     console.log("MoveXSF::MXSF::build_email_body()");
     // Read the HTML template from the file system
     var body = fs.readFileSync('./templates/party.html', 'utf8');
@@ -221,29 +246,48 @@ const build_email_body = (party) => {
     var name = party.Bnow__Customer_Full_Name__c;
     var date = party.Bnow__P_L_Date__c.replaceAll('-', '/');
     var time = dayjs('1/1/1 ' + party.Bnow__Booking_Time__c).format('hh:mm a') ;
-	var payment = (party.Bnow__Balance_Paid__c == 100) ? "" :
-                "If you still need to pay your deposit, you can do so <a href=\""+party.payment_link +"\">here</a>.";
+	var payment = (party.Bnow__Balance_Paid__c <= 100) ? " " : "Just a note, you still need to pay your deposit which you can do <a href=\""+party.payment_link +"\">here</a>.<br>";
     
 	var child_name = party.questions[0].Bnow__Answer__c;
 	var child_age  = party.questions[1].Bnow__Answer__c;
 	
     // Extract the number of jumpers from the party description
-    var jumpers = extract_jumpers_from_description(party.Bnow__Booking_Description__c);
-
+    var jumpers = get_jumpers(party.Bnow__Booking_Description__c);
     // Replace placeholders in the HTML template with actual values
-    var template = populate_template(body, {
-                     'bkn' : bkn, 
-                     'name': name, 
-                     'date': date, 
-                     'time': time, 
-                     'jumpers': jumpers, 
-                     'child_age': child_age, 
-                     'child_name': child_name, 
-                     'payment': payment 
-                    });
+    var template = {
+        'bkn' : bkn, 
+        'name': name, 
+        'date': date, 
+        'time': time, 
+        'jumpers': jumpers, 
+        'child_age': child_age, 
+        'child_name': child_name, 
+        'payment': payment 
+    }; 
 
+    //Apply record modifications from the webclient to the email template data.
+    var hash = get_booking_sfid(party);
+
+    var modded_template = template;
+    for(var m in template_modifications) {
+        var modification = template_modifications[m];
+        if(modification.hash == hash) {
+            console.log("Applying modification: ");
+            console.log(modification);
+            console.log("to");
+            console.log(modded_template);
+
+            var modded_template = modify_template_value_output(modded_template, 
+                                        modification.key, 
+                                        modification.value,
+                                        template_mod_functions[modification.f]); 
+            console.log("result = ");
+            console.log(modded_template);
+        }   
+    }
     // Return the populated email body
-    return template;
+    var populated = populate_template(body, modded_template);
+    return populated;
 };
 
 /**
@@ -300,6 +344,9 @@ async function send_party_email(party) {
         console.log(response['soapenv:Envelope']['soapenv:Body'].sendEmailResponse);
         reject(response['soapenv:Envelope']['soapenv:Body'].sendEmailResponse.result.failure);
     }
+
+    //clear template mods everytime we send out the batch of emails.
+    template_modifications = [];
 }
 
 function sanitizeForXml(value) {
@@ -309,5 +356,8 @@ function sanitizeForXml(value) {
 module.exports = {
     'get_parties': get_parties,
     'connect': connect,
-    'send_email':  send_party_email
-};
+    'send_email':  send_party_email,
+    'get_jumpers': get_jumpers,
+    'add_template_modification': add_template_modification,
+    'get_booking_sfid': get_booking_sfid
+}; 

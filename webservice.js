@@ -1,5 +1,6 @@
 const Table = require('table-builder');
 const express = require('express');
+const bodyParser = require('body-parser');
 
 // Import express framework and create an instance of the express app
 const app = express();
@@ -12,6 +13,8 @@ var mxsf;
 
 // Serve static files from the "public" folder
 app.use(express.static('public'));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: false }));
 
 /**
  * GET /gentable endpoint.
@@ -26,8 +29,13 @@ app.get('/gentable', (req, res) => {
 		var headers_array = [];
         // Add the "url" property to each party
         for(p in parties) {
-            parties[p]['url'] = parties[p].attributes.url;
-			headers_array.push(parties[p]);
+            var party = parties[p];
+            var hash = mxsf.get_booking_sfid(party);
+            var jumpers = mxsf.get_jumpers(party.Bnow__Booking_Description__c);
+
+            party['url'] = party.attributes.url;
+			party['number_jumpers'] = `<input id="${hash}-jumpers" type="number" value=${jumpers}>`
+            headers_array.push(party);
         }
 		
         // Define the headers for the table
@@ -36,7 +44,8 @@ app.get('/gentable', (req, res) => {
             "Bnow__Customer_Full_Name__c" : "Customer", 
             "Bnow__Customer_Email__c": "Email Address", 
             "Bnow__P_L_Date__c": "Date", 
-            "Bnow__Booking_Time__c": "Time"
+            "Bnow__Booking_Time__c": "Time",
+            "number_jumpers": "Jumpers"
         };
 
         // Create a table using the table-builder library and render it
@@ -61,6 +70,13 @@ app.get('/schedule', (req, res) => {
     });
 });
 
+app.post('/mod', (req, res) => {
+    console.log("MoveXSF::WebService: POST /mod");
+    var mod = req.body;
+    
+    mxsf.add_template_modification(mod.hash, mod.f, mod.key, parseInt(mod.value));
+});
+
 /**
  * GET /send endpoint.
  * This endpoint retrieves the parties from the MoveXSF instance and 
@@ -74,13 +90,16 @@ app.get('/send', (req, res) => {
     // Call the get_parties function on the MoveXSF instance
     mxsf.get_parties(parties_hashtable => {
 		var parties = [];
-		for(p in parties_hashtable) parties.push(parties_hashtable[p]);
+		for(p in parties_hashtable) { 
+            parties.push(parties_hashtable[p]);
+        }
 		
         var processed = 0;
         var results = [];
         // Send an email to each party using the send_email function of the MoveXSF instance
         parties.forEach(party => {
             if(mxsf.config.testing) party.Bnow__Customer_Email__c = mxsf.config.testing_address;
+            
             mxsf.send_email(party)
             .then(response => { //send worked
                 results.push({'result': 'success', 'party': party});
